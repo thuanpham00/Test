@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HCMUT | Rover Tracking (Light & Neon)</title>
+    
+    <!-- Leaflet & Tailwind CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- ROS 2 & Event Library -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+
+    <!-- Chart.js for Plotting Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Font Montserrat & Lucide Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        lightBg: '#f4f6f9',       // Nền xám rất nhạt
+                        whitePanel: '#ffffff',    // Nền trắng tinh cho các thẻ
+                        borderLight: '#e2e8f0',   // Viền xám nhạt
+                        neonCyan: '#00d8ff',      // Neon Xanh lơ
+                        neonPink: '#ff007a',      // Neon Hồng
+                        neonPurple: '#b000ff',    // Neon Tím
+                        neonGreen: '#00e676',     // Neon Xanh lá
+                        textMain: '#1e293b',      // Chữ chính (Slate 800)
+                        textMuted: '#64748b',     // Chữ phụ (Slate 500)
+                    },
+                    boxShadow: {
+                        'neon-cyan': '0 0 10px rgba(0, 216, 255, 0.5), 0 0 20px rgba(0, 216, 255, 0.3)',
+                        'neon-pink': '0 0 10px rgba(255, 0, 122, 0.5), 0 0 20px rgba(255, 0, 122, 0.3)',
+                        'neon-purple': '0 0 10px rgba(176, 0, 255, 0.5)',
+                        'soft-xl': '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for light theme */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Chỉnh nhẹ tương phản bản đồ để phù hợp với Light Theme */
+        .color-map .leaflet-tile-container { filter: brightness(1.05) contrast(1.1); }
+
+        /* Gradient text utility */
+        .text-gradient-cyan-purple {
+            background: linear-gradient(to right, #00d8ff, #b000ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .text-gradient-pink-orange {
+            background: linear-gradient(to right, #ff007a, #ff7300);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Leaflet Popup Light Override */
+        .leaflet-popup-content-wrapper { background: #ffffff; color: #1e293b; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; font-family: 'Montserrat', sans-serif;}
+        .leaflet-popup-tip { background: #ffffff; border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0;}
+        .leaflet-popup-content b { color: #ff007a; font-weight: 800; }
+    </style>
+</head>
+<body class="bg-lightBg font-sans text-textMain h-screen overflow-hidden select-none">
+
+    <!-- ================= TOAST NOTIFICATION SYSTEM ================= -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[2000] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- ================= MÀN HÌNH ĐĂNG NHẬP ================= -->
+    <div id="login-wrapper" class="flex h-screen w-screen bg-lightBg items-center justify-center relative">
+        <!-- Background Decor -->
+        <div class="absolute inset-0 z-0 opacity-40 pointer-events-none" style="background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 40px 40px;"></div>
+        
+        <div class="bg-whitePanel p-12 rounded-3xl shadow-soft-xl w-[420px] border border-borderLight flex flex-col items-center z-10 relative overflow-hidden">
+            <!-- Neon Top Border -->
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-neonCyan via-neonPurple to-neonPink"></div>
+            
+            <div class="p-4 bg-slate-50 rounded-full shadow-inner mb-4 relative">
+                <div class="absolute inset-0 rounded-full shadow-neon-cyan opacity-50 blur-md"></div>
+                <i data-lucide="shield-check" class="w-12 h-12 text-neonCyan relative z-10"></i>
+            </div>
+            
+            <h2 class="text-3xl font-black text-textMain tracking-widest mb-1">HCMUT</h2>
+            <p class="text-neonPurple text-xs font-bold mb-10 tracking-widest uppercase">Autonomous Vehicle System</p>
+            
+            <input type="text" id="username" placeholder="Username" class="w-full p-4 mb-4 rounded-xl bg-slate-50 text-textMain border border-borderLight focus:border-neonCyan focus:ring-2 focus:ring-neonCyan/20 focus:outline-none transition placeholder-slate-400 text-sm font-semibold shadow-sm">
+            <input type="password" id="password" placeholder="Password" onkeypress="handleEnter(event)" class="w-full p-4 mb-8 rounded-xl bg-slate-50 text-textMain border border-borderLight focus:border-neonPurple focus:ring-2 focus:ring-neonPurple/20 focus:outline-none transition placeholder-slate-400 text-sm font-semibold shadow-sm">
+            
+            <button onclick="checkLogin()" class="w-full py-4 bg-gradient-to-r from-neonCyan to-neonPurple hover:from-cyan-400 hover:to-purple-500 text-white font-extrabold rounded-xl transition-all shadow-neon-cyan active:scale-95 tracking-widest text-sm uppercase">
+                ĐĂNG NHẬP
+            </button>
+            <div id="login-error" class="text-neonPink text-xs font-bold mt-5 hidden bg-neonPink/10 py-3 px-4 rounded-lg w-full text-center border border-neonPink/20">
+                Tài khoản hoặc mật khẩu không đúng!
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= GIAO DIỆN CHÍNH (DASHBOARD CONTAINER) ================= -->
+    <div id="dashboard-container" class="hidden h-screen w-screen flex bg-lightBg">
+        
+        <!-- SIDEBAR ĐIỀU HƯỚNG CHÍNH -->
+        <div id="main-nav" class="w-[260px] bg-whitePanel flex flex-col justify-between py-6 border-r border-borderLight shadow-lg z-[1001]">
+            <div>
+                <!-- Brand Title -->
+                <div class="px-6 mb-10 flex items-center gap-3">
+                    <div class="relative">
+                        <i data-lucide="hexagon" class="w-8 h-8 text-neonPurple absolute -top-1 -left-1 opacity-50 animate-pulse blur-[2px]"></i>
+                        <i data-lucide="hexagon" class="w-6 h-6 text-neonCyan relative z-10"></i>
+                    </div>
+                    <span class="font-black text-xl tracking-wider text-gradient-cyan-purple uppercase"> HCMUT </span>
+                </div>
+
+                <!-- Navigation List -->
+                <nav class="flex flex-col gap-2 pr-4 pl-2">
+                    <button onclick="switchTab('tracking', this)" class="nav-btn active w-full text-left px-5 py-3.5 rounded-r-2xl text-sm font-bold tracking-wide text-neonPurple bg-neonPurple/10 border-l-4 border-neonPurple flex items-center gap-3 transition-all shadow-sm">
+                        <i data-lucide="map" class="w-5 h-5"></i>
+                        <span>Tracking</span>
+                    </button>
+                    <button onclick="switchTab('sensors', this)" class="nav-btn w-full text-left px-5 py-3.5 rounded-r-2xl text-sm font-semibold tracking-wide text-textMuted hover:text-neonPink hover:bg-neonPink/5 border-l-4 border-transparent flex items-center gap-3 transition-all">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                        <span>Robot Status</span>
+                    </button>
+                    <button onclick="switchTab('plotting', this)" class="nav-btn w-full text-left px-5 py-3.5 rounded-r-2xl text-sm font-semibold tracking-wide text-textMuted hover:text-neonCyan hover:bg-neonCyan/5 border-l-4 border-transparent flex items-center gap-3 transition-all">
+                        <i data-lucide="trending-up" class="w-5 h-5"></i>
+                        <span>Chart</span>
+                    </button>
+                    <button onclick="switchTab('manual', this)" class="nav-btn w-full text-left px-5 py-3.5 rounded-r-2xl text-sm font-semibold tracking-wide text-textMuted hover:text-neonGreen hover:bg-neonGreen/5 border-l-4 border-transparent flex items-center gap-3 transition-all">
+                        <i data-lucide="navigation" class="w-5 h-5"></i>
+                        <span>Manual Drive</span>
+                    </button>
+                    <button onclick="switchTab('settings', this)" class="nav-btn w-full text-left px-5 py-3.5 rounded-r-2xl text-sm font-semibold tracking-wide text-textMuted hover:text-neonPurple hover:bg-neonPurple/5 border-l-4 border-transparent flex items-center gap-3 transition-all">
+                        <i data-lucide="sliders" class="w-5 h-5"></i>
+                        <span>Setting</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- User Status & Logout -->
+            <div class="px-6 pt-6 border-t border-borderLight mt-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-[10px] text-textMuted font-black tracking-widest uppercase mb-1">Phiên đăng nhập</div>
+                        <div class="text-sm font-bold text-textMain">Administrator</div>
+                    </div>
+                    <button onclick="logout()" class="p-2 bg-slate-100 hover:bg-neonPink hover:text-white text-slate-500 rounded-full transition-colors shadow-sm">
+                        <i data-lucide="power" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KHU VỰC HIỂN THỊ NỘI DUNG (MAIN CONTENT) -->
+        <main class="flex-1 flex flex-col h-full overflow-hidden bg-lightBg relative">
+            
+            <!-- ================= TAB: TRACKING ================= -->
+            <div id="tab-tracking" class="tab-content flex h-full flex-col md:flex-row overflow-hidden w-full relative">
+                
+                <!-- BẢNG ĐIỀU KHIỂN CỐ ĐỊNH BÊN TRÁI -->
+                <div class="w-[340px] h-full bg-whitePanel border-r border-borderLight shadow-soft-xl flex flex-col z-[1000] shrink-0">
+                    <!-- MAIN CONTROL CONTENT -->
+                    <div class="p-6 overflow-y-auto flex-1 flex flex-col gap-6 custom-scrollbar">
+                        
+                        <!-- Connection -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="radio" class="w-4 h-4 text-neonCyan"></i>
+                                <h2 class="text-xs font-black text-textMain uppercase tracking-wider">Kết Nối Hệ Thống</h2>
+                            </div>
+                            <div id="connection_status" class="py-2.5 px-4 rounded-xl text-xs font-bold text-center bg-slate-100 border border-slate-200 text-slate-500 transition-all shadow-inner">
+                                Chưa kết nối
+                            </div>
+                        </div>
+
+                        <!-- WebSockets Settings -->
+                        <div>
+                            <input type="text" id="ws_url" value="ws://192.168.1.124:9090" class="w-full p-3 bg-slate-50 border border-borderLight text-textMain rounded-xl text-sm font-mono focus:outline-none focus:border-neonCyan focus:ring-1 focus:ring-neonCyan mb-3 transition shadow-inner font-semibold">
+                            <button onclick="connectROS()" class="w-full py-3 bg-textMain hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2">
+                                <i data-lucide="wifi" class="w-4 h-4 text-neonCyan"></i> Ghi nhận IP & Kết nối
+                            </button>
+                        </div>
+
+                        <!-- Local Coordinate Base -->
+<div class="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-borderLight border-l-[4px] border-l-neonPurple shadow-sm">
+    <h3 class="text-xs font-black text-neonPurple uppercase tracking-wider mb-3 flex items-center gap-2">
+        <i data-lucide="map-pin" class="w-4 h-4"></i>Gốc Tọa Độ 
+    </h3>
+    <div class="text-xs">
+        <div class="text-textMuted mb-2 font-medium">Gốc (0,0) quy đổi Odom XY:</div>
+        <div class="text-textMain mb-1 font-semibold flex justify-between">
+            <span>Vĩ độ (Lat):</span> 
+            <span class="font-bold font-mono text-neonPurple" id="base_lat">10.879318</span>
+        </div>
+        <div class="text-textMain font-semibold flex justify-between">
+            <span>Kinh độ (Lon):</span> 
+            <span class="font-bold font-mono text-neonPurple" id="base_lon">106.805878</span>
+        </div>
+    </div>
+</div>
+
+                        <!-- Path Planning (Manual Input) -->
+                        <div class="border-2 border-dashed border-neonPink/40 bg-neonPink/5 p-4 rounded-xl text-xs relative">
+                            <h3 class="text-[11px] font-black text-neonPink uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <i data-lucide="route" class="w-3.5 h-3.5"></i>Nhập Tọa Độ Quỹ Đạo (XY)
+                            </h3>
+                            
+                            <!-- Input Fields -->
+                            <div class="space-y-2 mb-4">
+                                <div class="flex gap-2">
+                                    <span class="font-bold text-textMain w-9 shrink-0 flex items-center">WP 1</span>
+                                    <input type="number" id="wp1_x" placeholder="X1" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                    <input type="number" id="wp1_y" placeholder="Y1" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                </div>
+                                <div class="flex gap-2">
+                                    <span class="font-bold text-textMain w-9 shrink-0 flex items-center">WP 2</span>
+                                    <input type="number" id="wp2_x" placeholder="X2" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                    <input type="number" id="wp2_y" placeholder="Y2" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                </div>
+                                <div class="flex gap-2">
+                                    <span class="font-bold text-textMain w-9 shrink-0 flex items-center">WP 3</span>
+                                    <input type="number" id="wp3_x" placeholder="X3" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                    <input type="number" id="wp3_y" placeholder="Y3" class="w-full p-2 rounded bg-white border border-borderLight text-xs focus:border-neonPink outline-none font-mono">
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button onclick="sendManualWaypoints()" class="w-full py-2.5 bg-gradient-to-r from-neonPink to-orange-500 hover:from-pink-500 hover:to-orange-600 text-white text-xs font-bold rounded-lg transition-all flex justify-center items-center gap-2 shadow-sm">
+                                    <i data-lucide="send" class="w-4 h-4"></i> Gửi Xuống Xe
+                                </button>
+                                <button onclick="clearWaypoints()" class="px-3 py-2.5 bg-white hover:bg-slate-50 text-neonPink text-xs font-bold rounded-lg border border-neonPink/30 transition-all flex justify-center items-center shadow-sm" title="Xóa quỹ đạo">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry -->
+                        <div class="mb-2">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i data-lucide="activity" class="w-4 h-4 text-neonGreen"></i>Real-time Telemetry
+                            </h3>
+                            <div class="bg-slate-800 p-4 rounded-xl text-xs flex flex-col gap-3 shadow-lg relative overflow-hidden">
+                                <div class="absolute right-[-20px] top-[-20px] w-16 h-16 bg-neonGreen/20 blur-2xl rounded-full"></div>
+                                <div class="flex justify-between items-center border-b border-slate-700 pb-2 relative z-10">
+                                    <span class="text-slate-400 font-semibold">Vĩ độ hiện tại:</span>
+                                    <span id="lbl_lat" class="font-mono font-bold text-neonGreen text-sm tracking-wide">Đang đợi...</span>
+                                </div>
+                                <div class="flex justify-between items-center border-b border-slate-700 pb-2 relative z-10">
+                                    <span class="text-slate-400 font-semibold">Kinh độ hiện tại:</span>
+                                    <span id="lbl_lon" class="font-mono font-bold text-neonGreen text-sm tracking-wide">Đang đợi...</span>
+                                </div>
+                                <div class="flex justify-between items-center relative z-10">
+                                    <span class="text-slate-400 font-semibold">Góc Yaw:</span>
+                                    <span class="font-mono font-bold text-white text-sm bg-slate-900 px-2 py-1 rounded shadow-inner"><span id="lbl_yaw">0.0</span>°</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BẢN ĐỒ BÊN PHẢI -->
+                <div class="flex-1 relative h-full bg-slate-200 z-0">
+                    <div id="map" class="w-full h-full color-map"></div>
+                </div>
+            </div>
+
+            <!-- ================= TAB: SENSORS / ROBOT STATUS ================= -->
+            <div id="tab-sensors" class="tab-content hidden h-full flex-col overflow-y-auto p-8 md:p-12 bg-lightBg custom-scrollbar w-full">
+                <div class="max-w-6xl mx-auto">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-8 pb-4 border-b-2 border-borderLight">
+                        <div class="flex flex-col gap-1">
+                            <h1 class="text-3xl font-black text-textMain tracking-wider uppercase text-gradient-cyan-purple">Robot Status</h1>
+                            <p class="text-textMuted text-sm font-semibold">Theo dõi trạng thái của các cảm biến</p>
+                        </div>
+                        <span id="mqtt-status" class="bg-white border border-neonCyan/30 text-neonCyan shadow-sm text-xs font-black px-4 py-2 rounded-full flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-neonCyan rounded-full animate-ping shadow-neon-cyan"></span>
+                            SYSTEM ACTIVE
+                        </span>
+                    </div>
+
+                    <!-- Grid Layout Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <!-- Card 1: Vị trí & hướng -->
+                        <div class="bg-whitePanel border border-borderLight rounded-2xl p-6 shadow-soft-xl relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                            <div class="absolute left-0 top-0 w-1.5 h-full bg-neonCyan"></div>
+                            <div class="flex items-center gap-2 text-textMain font-black text-sm uppercase tracking-wide mb-4">
+                                <div class="p-2 bg-neonCyan/10 rounded-lg text-neonCyan"><i data-lucide="navigation-2" class="w-5 h-5"></i></div>
+                                <span>Odometry (Vị trí & hướng)</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <div>
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Tọa độ X (m)</span>
+                                    <span id="stat_x" class="text-2xl font-black text-neonCyan font-mono">-</span>
+                                </div>
+                                <div class="border-l border-r border-slate-200">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Tọa độ Y (m)</span>
+                                    <span id="stat_y" class="text-2xl font-black text-neonCyan font-mono">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Góc Yaw (rad)</span>
+                                    <span id="stat_yaw_rad" class="text-2xl font-bold text-textMain font-mono">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Chế độ định vị vệ tinh -->
+                        <div class="bg-whitePanel border border-borderLight rounded-2xl p-6 shadow-soft-xl relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                            <div class="absolute left-0 top-0 w-1.5 h-full bg-neonPurple"></div>
+                            <div class="flex items-center gap-2 text-textMain font-black text-sm uppercase tracking-wide mb-4">
+                                <div class="p-2 bg-neonPurple/10 rounded-lg text-neonPurple"><i data-lucide="satellite" class="w-5 h-5"></i></div>
+                                <span>Tín hiệu GPS/GNSS</span>
+                            </div>
+                            <div class="mt-2 grid grid-cols-3 gap-2 text-center bg-slate-50 p-3 rounded-xl border border-slate-100 items-center h-[88px]">
+                                <div class="flex flex-col justify-center">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Chế độ Fix</span>
+                                    <span id="stat_gps_mode" class="text-[11px] font-black text-neonPurple tracking-widest font-mono bg-white px-1 py-1 rounded shadow-sm border border-neonPurple/20 block truncate">RTK FIX</span>
+                                </div>
+                                <div class="border-l border-slate-200 flex flex-col justify-center">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Vệ Tinh</span>
+                                    <span id="stat_gps_sat" class="text-2xl font-black text-textMain font-mono">-</span>
+                                </div>
+                                <div class="border-l border-slate-200 flex flex-col justify-center">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">HDOP</span>
+                                    <span id="stat_gps_hdop" class="text-2xl font-black text-textMain font-mono">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Tốc độ bánh thực tế -->
+                        <div class="bg-whitePanel border border-borderLight rounded-2xl p-6 shadow-soft-xl relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                            <div class="absolute left-0 top-0 w-1.5 h-full bg-neonPink"></div>
+                            <div class="flex items-center gap-2 text-textMain font-black text-sm uppercase tracking-wide mb-4">
+                                <div class="p-2 bg-neonPink/10 rounded-lg text-neonPink"><i data-lucide="gauge" class="w-5 h-5"></i></div>
+                                <span>Encoder (Vận tốc thực)</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <div class="border-r border-slate-200">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Bánh Trái (m/s)</span>
+                                    <span id="stat_left_vel" class="text-2xl font-black text-neonPink font-mono">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Bánh Phải (m/s)</span>
+                                    <span id="stat_right_vel" class="text-2xl font-black text-neonPink font-mono">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Tốc độ điều khiển động cơ -->
+                        <div class="bg-whitePanel border border-borderLight rounded-2xl p-6 shadow-soft-xl relative overflow-hidden group hover:-translate-y-1 transition-transform">
+                            <div class="absolute left-0 top-0 w-1.5 h-full bg-neonGreen"></div>
+                            <div class="flex items-center gap-2 text-textMain font-black text-sm uppercase tracking-wide mb-4">
+                                <div class="p-2 bg-neonGreen/10 rounded-lg text-neonGreen"><i data-lucide="settings-2" class="w-5 h-5"></i></div>
+                                <span>Cmd_vel (Lệnh điều khiển)</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <div class="border-r border-slate-200">
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Lệnh Trái (m/s)</span>
+                                    <span id="stat_left_cmd" class="text-2xl font-black text-neonGreen font-mono">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-textMuted font-bold uppercase tracking-wider block mb-1">Lệnh Phải (m/s)</span>
+                                    <span id="stat_right_cmd" class="text-2xl font-black text-neonGreen font-mono">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Meta Info Grid -->
+                        <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+                            <!-- Card 7: Ổ khóa -->
+                            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Bảo mật hệ thống</span>
+                                <div class="flex items-center gap-3 text-white font-bold text-lg">
+                                    <div class="p-2 bg-neonGreen/20 rounded-full shadow-neon-cyan"><i data-lucide="unlock" class="w-5 h-5 text-neonGreen"></i></div>
+                                    <span class="tracking-wide">Đã mở khóa</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Card 8: Trạng thái di chuyển -->
+                            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Trạng thái xe</span>
+                                <div class="flex items-center gap-3 text-white font-bold text-lg">
+                                    <div class="p-2 bg-neonCyan/20 rounded-full shadow-neon-cyan"><i data-lucide="truck" class="w-5 h-5 text-neonCyan"></i></div>
+                                    <span id="stat_drive_state" class="uppercase tracking-widest text-sm text-neonCyan">Đang chờ lệnh</span>
+                                </div>
+                            </div>
+
+                            <!-- Card 9: Đến điểm -->
+                            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tiến độ dẫn đường</span>
+                                <div class="flex items-center gap-3 text-white font-bold text-lg">
+                                    <div class="p-2 bg-neonPink/20 rounded-full shadow-neon-pink"><i data-lucide="map-pin" class="w-5 h-5 text-neonPink"></i></div>
+                                    <span id="stat_target_wp" class="font-mono text-neonPink tracking-wider text-xl">0/0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= TAB: PLOTTING ================= -->
+            <div id="tab-plotting" class="tab-content hidden h-full flex-col overflow-y-auto p-8 md:p-12 bg-lightBg custom-scrollbar w-full">
+                <div class="max-w-6xl mx-auto">
+                    <!-- Header -->
+                    <div class="flex items-center gap-4 mb-8 border-b-2 border-borderLight pb-4">
+                        <h1 class="text-3xl font-black text-textMain tracking-wider uppercase text-gradient-pink-orange">Data Plotting</h1>
+                        <span class="bg-white border border-borderLight text-textMuted shadow-sm text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                            <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> Live Stream
+                        </span>
+                        <span class="text-xs text-textMuted font-semibold ml-auto bg-slate-100 px-4 py-2 rounded-lg border border-slate-200">
+                            Đã nhận: <span id="msg-count-lbl" class="text-neonPink font-black font-mono text-sm ml-1">0</span> messages
+                        </span>
+                    </div>
+
+                    <!-- 2 Column Chart Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Chart 1 -->
+                        <div class="bg-whitePanel rounded-2xl p-6 shadow-soft-xl border border-borderLight flex flex-col">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-4 border-l-4 border-neonCyan pl-2">Vận tốc Bánh Trái (Điều khiển & Thực tế)</h3>
+                            <div class="flex-1 relative min-h-[250px] w-full"><canvas id="chart_left_wheel"></canvas></div>
+                        </div>
+                        <!-- Chart 2 -->
+                        <div class="bg-whitePanel rounded-2xl p-6 shadow-soft-xl border border-borderLight flex flex-col">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-4 border-l-4 border-neonPink pl-2">Vận tốc Bánh Phải (Điều khiển & Thực tế)</h3>
+                            <div class="flex-1 relative min-h-[250px] w-full"><canvas id="chart_right_wheel"></canvas></div>
+                        </div>
+                        <!-- Chart 3 -->
+                        <div class="bg-whitePanel rounded-2xl p-6 shadow-soft-xl border border-borderLight flex flex-col">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-4 border-l-4 border-neonPurple pl-2">Cross Track Error( Sai số ngang)</h3>
+                            <div class="flex-1 relative min-h-[250px] w-full"><canvas id="chart_cross_track"></canvas></div>
+                        </div>
+                        <!-- Chart 4 -->
+                        <div class="bg-whitePanel rounded-2xl p-6 shadow-soft-xl border border-borderLight flex flex-col">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-4 border-l-4 border-neonGreen pl-2">Along Track Distance (Khoảng cách còn lại)</h3>
+                            <div class="flex-1 relative min-h-[250px] w-full"><canvas id="chart_along_track"></canvas></div>
+                        </div>
+                        <!-- Chart 5 -->
+                        <div class="bg-whitePanel rounded-2xl p-6 shadow-soft-xl border border-borderLight md:col-span-2 flex flex-col">
+                            <h3 class="text-xs font-black text-textMain uppercase tracking-wider mb-4 border-l-4 border-orange-500 pl-2">Yaw vs Desired Heading</h3>
+                            <div class="flex-1 relative min-h-[280px] w-full"><canvas id="chart_yaw_heading"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= OTHER TABS ================= -->
+            <div id="tab-manual" class="tab-content hidden h-full flex-col overflow-y-auto p-10 bg-lightBg w-full">
+                <div class="max-w-2xl mx-auto bg-whitePanel border border-borderLight rounded-3xl p-10 shadow-soft-xl text-center relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-br from-neonGreen/5 to-transparent pointer-events-none"></div>
+                    <div class="w-24 h-24 mx-auto bg-neonGreen/10 rounded-full flex items-center justify-center mb-6 shadow-neon-cyan">
+                        <i data-lucide="gamepad-2" class="w-12 h-12 text-neonGreen"></i>
+                    </div>
+                    <h2 class="text-2xl font-black mb-3 text-textMain uppercase tracking-wider">Manual Key Drive</h2>
+                    <p class="text-textMuted text-sm font-medium">Chức năng đang được phát triển. Vui lòng đăng nhập vào mạng nội bộ để dùng Joystick</code>.</p>
+                </div>
+            </div>
+
+            <!-- ================= TAB: SETTINGS ================= -->
+            <div id="tab-settings" class="tab-content hidden h-full flex-col overflow-y-auto p-8 md:p-12 bg-lightBg w-full custom-scrollbar">
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    <!-- Cột 1: Thuật toán LOS -->
+                    <div class="bg-whitePanel border border-borderLight rounded-3xl p-8 shadow-soft-xl h-fit">
+                        <div class="flex items-center gap-4 mb-6 border-b-2 border-borderLight pb-5">
+                            <div class="p-3 bg-neonPurple/10 rounded-xl shadow-sm"><i data-lucide="map" class="w-7 h-7 text-neonPurple"></i></div>
+                            <div>
+                                <h2 class="text-xl font-black text-textMain uppercase tracking-wider">Cấu Hình LOS</h2>
+                                <p class="text-textMuted text-xs font-semibold mt-1">Thông số bám đường quỹ đạo</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-5">
+                            <!-- Parameter 1 -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonPurple focus-within:ring-1 focus-within:ring-neonPurple transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="eye" class="w-4 h-4 text-neonPurple"></i> Look-ahead (m)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 1.4</span>
+                                </div>
+                                <input type="number" id="set_look_ahead" step="0.1" value="1.4" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonPurple shadow-inner transition font-mono">
+                            </div>
+
+                            <!-- Parameter 2 -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonPink focus-within:ring-1 focus-within:ring-neonPink transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="zap" class="w-4 h-4 text-neonPink"></i> Max Speed (m/s)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 1.5</span>
+                                </div>
+                                <input type="number" id="set_max_speed" step="0.1" value="1.5" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonPink shadow-inner transition font-mono">
+                            </div>
+
+                            <!-- Thêm Min Speed -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500 transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="snail" class="w-4 h-4 text-orange-500"></i> Min Speed (m/s)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.4</span>
+                                </div>
+                                <input type="number" id="set_min_speed" step="0.1" value="0.4" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-orange-500 shadow-inner transition font-mono">
+                            </div>
+				
+				<div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-500 transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="fast-forward" class="w-4 h-4 text-teal-500"></i> Max Accel (m/s²)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.5</span>
+                                </div>
+                                <input type="number" id="set_max_accel" step="0.1" value="0.5" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-teal-500 shadow-inner transition font-mono">
+                            </div>
+
+                            <!-- Parameter 3 -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonCyan focus-within:ring-1 focus-within:ring-neonCyan transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="target" class="w-4 h-4 text-neonCyan"></i> Stop Distance (m)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.8</span>
+                                </div>
+                                <input type="number" id="set_stop_dist" step="0.1" value="0.8" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonCyan shadow-inner transition font-mono">
+                            </div>
+
+                            <!-- Thêm Deceleration Distance -->
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-yellow-500 focus-within:ring-1 focus-within:ring-yellow-500 transition-all">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                        <i data-lucide="arrow-down-to-line" class="w-4 h-4 text-yellow-500"></i> Decel Dist (m)
+                                    </label>
+                                    <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 2.0</span>
+                                </div>
+                                <input type="number" id="set_decel_dist" step="0.1" value="2.0" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-yellow-500 shadow-inner transition font-mono">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cột 2: Cấu hình PID Heading -->
+                    <div class="bg-whitePanel border border-borderLight rounded-3xl p-8 shadow-soft-xl flex flex-col justify-between h-fit">
+                        <div>
+                            <div class="flex items-center gap-4 mb-6 border-b-2 border-borderLight pb-5">
+                                <div class="p-3 bg-neonGreen/10 rounded-xl shadow-sm"><i data-lucide="cpu" class="w-7 h-7 text-neonGreen"></i></div>
+                                <div>
+                                    <h2 class="text-xl font-black text-textMain uppercase tracking-wider">Điều Khiển (PID)</h2>
+                                    <p class="text-textMuted text-xs font-semibold mt-1">Thông số tự động bám góc hướng</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-5">
+                                <!-- Kp -->
+                                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonGreen focus-within:ring-1 focus-within:ring-neonGreen transition-all">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                            <i data-lucide="gauge-circle" class="w-4 h-4 text-neonGreen"></i> Kp (Tỉ lệ)
+                                        </label>
+                                        <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.6</span>
+                                    </div>
+                                    <input type="number" id="set_kp" step="0.01" value="0.6" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonGreen shadow-inner transition font-mono">
+                                </div>
+
+                                <!-- Ki -->
+                                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonGreen focus-within:ring-1 focus-within:ring-neonGreen transition-all">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                            <i data-lucide="gauge-circle" class="w-4 h-4 text-neonGreen"></i> Ki (Tích phân)
+                                        </label>
+                                        <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.0</span>
+                                    </div>
+                                    <input type="number" id="set_ki" step="0.01" value="0.0" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonGreen shadow-inner transition font-mono">
+                                </div>
+
+                                <!-- Kd -->
+                                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-neonGreen focus-within:ring-1 focus-within:ring-neonGreen transition-all">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                            <i data-lucide="gauge-circle" class="w-4 h-4 text-neonGreen"></i> Kd (Đạo hàm)
+                                        </label>
+                                        <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.1</span>
+                                    </div>
+                                    <input type="number" id="set_kd" step="0.01" value="0.1" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-neonGreen shadow-inner transition font-mono">
+                                </div>
+
+                                <!-- Thêm Sharp Turn Angle -->
+                                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-red-500 focus-within:ring-1 focus-within:ring-red-500 transition-all">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                            <i data-lucide="corner-up-right" class="w-4 h-4 text-red-500"></i> Sharp Turn (rad)
+                                        </label>
+                                        <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 0.8</span>
+                                    </div>
+                                    <input type="number" id="set_sharp_turn" step="0.1" value="0.8" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-red-500 shadow-inner transition font-mono">
+                                </div>
+
+                                <!-- Thêm Steering Limit -->
+                                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-black text-textMain flex items-center gap-2">
+                                            <i data-lucide="move-horizontal" class="w-4 h-4 text-blue-500"></i> Steer Limit (m/s)
+                                        </label>
+                                        <span class="text-[10px] text-textMuted font-bold bg-white px-2 py-1 rounded border border-slate-200 font-mono">Def: 1.2</span>
+                                    </div>
+                                    <input type="number" id="set_steer_limit" step="0.1" value="1.2" class="w-full p-3 bg-white text-textMain border border-slate-200 rounded-xl text-lg font-black focus:outline-none focus:border-blue-500 shadow-inner transition font-mono">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nút Gửi Dữ Liệu -->
+                    <div class="md:col-span-2">
+                        <button onclick="sendSettings()" class="w-full py-4 mt-2 bg-gradient-to-r from-neonPurple via-neonPink to-neonCyan hover:from-purple-600 hover:to-cyan-500 text-white font-black rounded-xl transition-all shadow-neon-pink flex justify-center items-center gap-3 text-sm active:scale-95 tracking-widest uppercase">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                            Gửi Cấu Hình
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // UI & NAVIGATION CONTROLLER
+        // ==========================================
+        function checkLogin() {
+            let user = document.getElementById('username').value;
+            let pass = document.getElementById('password').value;
+            
+            if (user === 'admin' && pass === 'admin') {
+                document.getElementById('login-wrapper').style.display = 'none';
+                document.getElementById('dashboard-container').classList.remove('hidden');
+                
+                lucide.createIcons();
+                
+                setTimeout(() => {
+                    map.invalidateSize();
+                    initCharts(); 
+                    startSimulation(); 
+                }, 200);
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+            }
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') checkLogin();
+        }
+
+        function logout() {
+            if(simulationInterval) clearInterval(simulationInterval);
+            document.getElementById('dashboard-container').classList.add('hidden');
+            document.getElementById('login-wrapper').style.display = 'flex';
+            document.getElementById('password').value = '';
+            document.getElementById('login-error').style.display = 'none';
+        }
+
+        function switchTab(tabId, btnElement) {
+            const contents = document.querySelectorAll('.tab-content');
+            
+            // Xử lý ẩn tất cả các Tab bằng class 'hidden' của Tailwind
+            contents.forEach(content => {
+                content.classList.remove('flex');
+                content.classList.add('hidden');
+            });
+            
+            // Hiện đúng tab cần mở bằng class 'flex'
+            const targetContent = document.getElementById('tab-' + tabId);
+            if(targetContent) {
+                targetContent.classList.remove('hidden');
+                targetContent.classList.add('flex');
+            }
+
+            // Xoá trạng thái active của tất cả các nút điều hướng 
+            // (Được chỉnh sửa để giữ lại hiệu ứng hover gốc của bạn)
+            const navButtons = document.querySelectorAll('.nav-btn');
+            navButtons.forEach(btn => {
+                btn.classList.remove('active', 'border-neonPurple', 'border-neonPink', 'border-neonCyan', 'border-neonGreen');
+                btn.classList.remove('bg-neonPurple/10', 'bg-neonPink/10', 'bg-neonCyan/10', 'bg-neonGreen/10');
+                btn.classList.remove('text-neonPurple', 'text-neonPink', 'text-neonCyan', 'text-neonGreen');
+                
+                btn.classList.add('text-textMuted', 'border-transparent');
+                btn.classList.remove('font-bold');
+                btn.classList.add('font-semibold');
+            });
+
+            // Set class active riêng biệt cho Tab vừa nhấn
+            btnElement.classList.remove('text-textMuted', 'border-transparent', 'font-semibold');
+            btnElement.classList.add('active', 'font-bold');
+
+            switch(tabId) {
+                case 'tracking': 
+                    btnElement.classList.add('text-neonPurple', 'bg-neonPurple/10', 'border-neonPurple'); 
+                    break;
+                case 'sensors':  
+                    btnElement.classList.add('text-neonPink', 'bg-neonPink/10', 'border-neonPink'); 
+                    break;
+                case 'plotting': 
+                    btnElement.classList.add('text-neonCyan', 'bg-neonCyan/10', 'border-neonCyan'); 
+                    break;
+                case 'manual':   
+                    btnElement.classList.add('text-neonGreen', 'bg-neonGreen/10', 'border-neonGreen'); 
+                    break;
+                case 'settings': 
+                    btnElement.classList.add('text-neonPurple', 'bg-neonPurple/10', 'border-neonPurple'); 
+                    break;
+            }
+
+            if(tabId === 'tracking') {
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+        }
+
+        function showNotification(message, type = "info") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-white border-slate-200';
+            let textClass = 'text-slate-800';
+            let iconColor = 'text-neonCyan';
+            let iconName = 'info';
+
+            if (type === 'success') {
+                iconColor = 'text-neonGreen'; iconName = 'check-circle';
+            } else if (type === 'warning') {
+                iconColor = 'text-neonPink'; iconName = 'alert-triangle';
+            }
+
+            toast.className = `flex items-center gap-3 py-3.5 px-5 rounded-2xl border shadow-soft-xl transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto max-w-sm ${bgClass} ${textClass}`;
+            
+            toast.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5 shrink-0 ${iconColor}"></i> <span class="font-bold text-sm">${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            setTimeout(() => toast.classList.remove('opacity-0', 'translate-y-2'), 10);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        lucide.createIcons();
+
+        // ==========================================
+        // KHỞI TẠO BẢN ĐỒ VÀ TOẠ ĐỘ GỐC
+        // ==========================================
+        const ref_lat = 10.879318; 
+        const ref_lon = 106.805878;
+
+        var map = L.map('map', {zoomControl: false}).setView([ref_lat, ref_lon], 20);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 21, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '© Google Maps'
+        }).addTo(map);
+
+        var baseIcon = L.divIcon({
+            html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="24" height="24">
+                    <circle cx="50" cy="50" r="45" fill="#ffffff" stroke="#b000ff" stroke-width="8" opacity="0.9"/>
+                    <circle cx="50" cy="50" r="15" fill="#b000ff"/>
+                    <text x="50" y="85" font-size="25" text-anchor="middle" fill="#b000ff" font-family="Montserrat" font-weight="900">B</text>
+                   </svg>`,
+            className: 'base-icon drop-shadow-md', iconSize: [20, 20], iconAnchor: [10, 10], popupAnchor: [0, -12]
+        });
+        L.marker([ref_lat, ref_lon], {icon: baseIcon}).addTo(map).bindPopup("<b>TRẠM BASE (Origin)</b><br>Tọa độ Odom: X=0, Y=0");
+
+       var roverIcon = L.divIcon({
+    html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="16" height="16">
+            <circle cx="50" cy="50" r="40" fill="#00d8ff" stroke="#ffffff" stroke-width="8"/>
+           </svg>`,
+    className: 'rover-icon drop-shadow-xl', 
+    iconSize: [24, 24], 
+    iconAnchor: [12, 12]
+});
+        var roverMarker = L.marker([ref_lat + 0.00001, ref_lon + 0.00001], {icon: roverIcon, zIndexOffset: 1000}).addTo(map);
+
+        // ==========================================
+        // QUẢN LÝ QUỸ ĐẠO & ROS
+        // ==========================================
+        var ros = null;
+        var pathTopic = null;
+        var settingsTopic = null; 
+        var currentRoverPos = [ref_lat + 0.00001, ref_lon + 0.00001]; 
+        var selectedWaypoints = []; 
+        var waypointMarkers = [];   
+        var plannedPathLine = L.polyline([], {color: '#ff007a', dashArray: '5, 5', weight: 2, opacity: 0.8}).addTo(map); 
+        var actualTrajectory = []; 
+        var actualPathLine = L.polyline([], {color: '#007bff', weight: 2, opacity: 0.9}).addTo(map); 
+	var isNavigating = false;
+        const UPDATE_DIST_THRESHOLD = 0.4; 
+        const UPDATE_YAW_THRESHOLD = 0.5;  
+        var last_yaw_deg = null;
+
+        function connectROS() {
+            var url = document.getElementById('ws_url').value;
+            if (ros) ros.close(); 
+            
+            let statusBox = document.getElementById('connection_status');
+            statusBox.className = "py-2.5 px-4 rounded-xl text-xs font-bold text-center bg-slate-100 border border-slate-200 text-slate-500 transition-all shadow-inner";
+            statusBox.innerHTML = "Đang kết nối...";
+
+            ros = new ROSLIB.Ros({ url: url });
+
+            ros.on('connection', function() {
+if (simulationInterval) clearInterval(simulationInterval);
+    simulationInterval = null;
+                statusBox.className = "py-2.5 px-4 rounded-xl text-xs font-bold text-center bg-neonCyan text-slate-900 transition-all shadow-neon-cyan";
+                statusBox.innerHTML = "Đã Kết Nối ROS 2!";
+                setupSubscribers();
+                showNotification("Kết nối ROS 2 Server thành công!", "success");
+            });
+
+            ros.on('error', function(error) {
+                statusBox.className = "py-2.5 px-4 rounded-xl text-xs font-bold text-center bg-neonPink/10 border border-neonPink/30 text-neonPink transition-all";
+                statusBox.innerHTML = "Lỗi WebSockets!";
+                showNotification("Lỗi kết nối WebSockets!", "warning");
+            });
+
+            ros.on('close', function() {
+                statusBox.className = "py-2.5 px-4 rounded-xl text-xs font-bold text-center bg-slate-100 border border-slate-200 text-slate-500 transition-all shadow-inner";
+                statusBox.innerHTML = "Đã ngắt kết nối";
+            });
+        }
+
+        function setupSubscribers() {
+            var gpsSub = new ROSLIB.Topic({ ros: ros, name: '/gps/raw', messageType: 'std_msgs/String' });
+            gpsSub.subscribe(function(msg) {
+                let parts = msg.data.split(',');
+                if(parts.length === 2) {
+                    let lat = parseFloat(parts[0]);
+                    let lon = parseFloat(parts[1]);
+			document.getElementById('lbl_lat').innerText = lat.toFixed(7);
+        document.getElementById('lbl_lon').innerText = lon.toFixed(7);
+                    let newLatLng = L.latLng(lat, lon);
+                    let currentLatLng = L.latLng(currentRoverPos[0], currentRoverPos[1]);
+
+                    if (actualTrajectory.length === 0 || currentLatLng.distanceTo(newLatLng) > UPDATE_DIST_THRESHOLD) {
+                        document.getElementById('lbl_lat').innerText = lat.toFixed(7);
+                        document.getElementById('lbl_lon').innerText = lon.toFixed(7);
+                        
+                        currentRoverPos = [lat, lon]; 
+                        roverMarker.setLatLng(currentRoverPos);
+                        actualTrajectory.push(currentRoverPos);
+                        actualPathLine.setLatLngs(actualTrajectory);
+
+                     
+                    }
+                }
+            });
+
+            // GIAO TIẾP DỮ LIỆU GPS FIX (TỪ GPS NODE) ĐỂ HIỂN THỊ LÊN UI
+            var gpsFixSub = new ROSLIB.Topic({ ros: ros, name: '/gps_fix', messageType: 'std_msgs/Int32' });
+            gpsFixSub.subscribe(function(msg) {
+                let modeStr = "NO FIX";
+                let colorClass = "text-textMuted";
+                let bgClass = "border-slate-200";
+                
+                // Chuẩn NMEA GGA Fix Quality
+                switch(msg.data) {
+                    case 1: modeStr = "GPS FIX"; colorClass = "text-neonCyan"; bgClass = "border-neonCyan/20"; break;
+                    case 2: modeStr = "DGPS FIX"; colorClass = "text-neonGreen"; bgClass = "border-neonGreen/20"; break;
+                    case 4: modeStr = "RTK FIX"; colorClass = "text-neonPurple"; bgClass = "border-neonPurple/20"; break;
+                    case 5: modeStr = "RTK FLOAT"; colorClass = "text-neonPink"; bgClass = "border-neonPink/20"; break;
+                }
+                
+                let el = document.getElementById('stat_gps_mode');
+                el.innerText = modeStr;
+                el.className = `text-[11px] font-black ${colorClass} tracking-widest font-mono bg-white px-1 py-1 rounded shadow-sm border ${bgClass} block truncate`;
+            });
+
+            var gpsSatSub = new ROSLIB.Topic({ ros: ros, name: '/gps_sat', messageType: 'std_msgs/Int32' });
+            gpsSatSub.subscribe(function(msg) {
+                document.getElementById('stat_gps_sat').innerText = msg.data;
+            });
+
+            var gpsHdopSub = new ROSLIB.Topic({ ros: ros, name: '/gps_hdop', messageType: 'std_msgs/Float64' });
+            gpsHdopSub.subscribe(function(msg) {
+                document.getElementById('stat_gps_hdop').innerText = msg.data.toFixed(2);
+            });
+
+            var odomSub = new ROSLIB.Topic({ ros: ros, name: '/odometry/filtered', messageType: 'nav_msgs/Odometry' });
+            odomSub.subscribe(function(msg) {
+                let q = msg.pose.pose.orientation;
+                let siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+                let cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+                let yaw_rad = Math.atan2(siny_cosp, cosy_cosp);
+                let yaw_deg = yaw_rad * (180.0 / Math.PI);
+                
+                // CẬP NHẬT TOẠ ĐỘ X, Y VÀ YAW LÊN BẢNG ROBOT STATUS
+                document.getElementById('stat_x').innerText = msg.pose.pose.position.x.toFixed(2);
+                document.getElementById('stat_y').innerText = msg.pose.pose.position.y.toFixed(2);
+                document.getElementById('stat_yaw_rad').innerText = yaw_rad.toFixed(2);
+
+                // CẬP NHẬT GÓC YAW THỰC TẾ LÊN BIỂU ĐỒ
+                if(charts.yaw && document.getElementById('chart_yaw_heading')) {
+                    updateChartData(charts.yaw, 0, yaw_deg); 
+                }
+
+                if (last_yaw_deg === null || Math.abs(yaw_deg - last_yaw_deg) > UPDATE_YAW_THRESHOLD) {
+                    last_yaw_deg = yaw_deg;
+                    document.getElementById('lbl_yaw').innerText = yaw_deg.toFixed(1);
+                    let css_rotation = 90 - yaw_deg; 
+                    let iconElement = roverMarker._icon;
+                    if (iconElement) iconElement.style.transform = iconElement.style.transform.replace(/rotateZ\(.*?\)/, '') + ` rotateZ(${css_rotation}deg)`;
+                }
+            });
+
+            // GIAO TIẾP DỮ LIỆU TỐC ĐỘ THẬT (TỪ CAN NODE)
+            var leftVelSub = new ROSLIB.Topic({ ros: ros, name: '/left_vel', messageType: 'std_msgs/Float64' });
+            leftVelSub.subscribe(function(msg) {
+                document.getElementById('stat_left_vel').innerText = msg.data.toFixed(2);
+                if(charts.left && document.getElementById('chart_left_wheel')) {
+                    updateChartData(charts.left, 0, msg.data);
+                    charts.left.update();
+                }
+            });
+
+            var rightVelSub = new ROSLIB.Topic({ ros: ros, name: '/right_vel', messageType: 'std_msgs/Float64' });
+            rightVelSub.subscribe(function(msg) {
+                document.getElementById('stat_right_vel').innerText = msg.data.toFixed(2);
+                if(charts.right && document.getElementById('chart_right_wheel')) {
+                    updateChartData(charts.right, 0, msg.data);
+                    charts.right.update();
+                }
+            });
+
+            // GIAO TIẾP DỮ LIỆU TỐC ĐỘ ĐIỀU KHIỂN (TỪ PID NODE)
+            var leftCmdSub = new ROSLIB.Topic({ ros: ros, name: '/left_vel_cmd', messageType: 'std_msgs/Float64' });
+            leftCmdSub.subscribe(function(msg) {
+                document.getElementById('stat_left_cmd').innerText = msg.data.toFixed(2);
+                if(charts.left && document.getElementById('chart_left_wheel')) {
+                    updateChartData(charts.left, 1, msg.data);
+                    // Biểu đồ sẽ được update khi nhận left_vel thật để đồng bộ
+                }
+            });
+
+            var rightCmdSub = new ROSLIB.Topic({ ros: ros, name: '/right_vel_cmd', messageType: 'std_msgs/Float64' });
+            rightCmdSub.subscribe(function(msg) {
+                document.getElementById('stat_right_cmd').innerText = msg.data.toFixed(2);
+                if(charts.right && document.getElementById('chart_right_wheel')) {
+                    updateChartData(charts.right, 1, msg.data);
+                }
+            });
+
+            // GIAO TIẾP DỮ LIỆU TỪ LOS NODE (CTE, ATD, DESIRED HEADING)
+            var desiredHeadingSub = new ROSLIB.Topic({ ros: ros, name: '/desired_heading', messageType: 'std_msgs/Float64' });
+            desiredHeadingSub.subscribe(function(msg) {
+                let desired_yaw_deg = msg.data * (180.0 / Math.PI); 
+                if(charts.yaw && document.getElementById('chart_yaw_heading')) {
+                    updateChartData(charts.yaw, 1, desired_yaw_deg);
+                    charts.yaw.update();
+                }
+            });
+
+            var cteSub = new ROSLIB.Topic({ ros: ros, name: '/cross_track_error', messageType: 'std_msgs/Float64' });
+            cteSub.subscribe(function(msg) {
+                if(charts.cross && document.getElementById('chart_cross_track')) {
+                    updateChartData(charts.cross, 0, msg.data);
+                    charts.cross.update();
+                }
+            });
+
+            var atdSub = new ROSLIB.Topic({ ros: ros, name: '/along_track_distance', messageType: 'std_msgs/Float64' });
+            atdSub.subscribe(function(msg) {
+                if(charts.along && document.getElementById('chart_along_track')) {
+                    updateChartData(charts.along, 0, msg.data);
+                    charts.along.update();
+                }
+            });
+
+            pathTopic = new ROSLIB.Topic({ ros: ros, name: '/web_path', messageType: 'nav_msgs/Path' });
+            settingsTopic = new ROSLIB.Topic({ ros: ros, name: '/web_settings', messageType: 'std_msgs/String' });
+        }
+
+        function sendSettings() {
+            let lookAhead = parseFloat(document.getElementById('set_look_ahead').value);
+            let maxSpeed = parseFloat(document.getElementById('set_max_speed').value);
+            let minSpeed = parseFloat(document.getElementById('set_min_speed').value);
+            let maxAccel = parseFloat(document.getElementById('set_max_accel').value); // <-- Added New Variable
+            let stopDist = parseFloat(document.getElementById('set_stop_dist').value);
+            let decelDist = parseFloat(document.getElementById('set_decel_dist').value);
+            
+            let kp = parseFloat(document.getElementById('set_kp').value);
+            let ki = parseFloat(document.getElementById('set_ki').value);
+            let kd = parseFloat(document.getElementById('set_kd').value);
+            let sharpTurn = parseFloat(document.getElementById('set_sharp_turn').value);
+            let steerLimit = parseFloat(document.getElementById('set_steer_limit').value);
+
+            // Added isNaN check for maxAccel
+            if (isNaN(lookAhead) || isNaN(maxSpeed) || isNaN(minSpeed) || isNaN(maxAccel) || isNaN(stopDist) || isNaN(decelDist) || 
+                isNaN(kp) || isNaN(ki) || isNaN(kd) || isNaN(sharpTurn) || isNaN(steerLimit)) {
+                showNotification("Please fill in all valid parameters!", "warning"); return;
+            }
+
+            // Sync sim speed
+            simSpeed = Math.min(0.0001, maxSpeed * 0.000005); 
+            
+            if (!ros || !ros.isConnected) {
+                showNotification("ROS 2 not connected! Saved locally to Simulator.", "info"); return;
+            }
+
+            let configPayload = { 
+                look_ahead: lookAhead, 
+                max_speed: maxSpeed, 
+                min_speed: minSpeed,
+                max_accel: maxAccel, // <-- Added to Payload
+                stop_distance: stopDist,
+                decel_distance: decelDist,
+                pid_kp: kp,
+                pid_ki: ki,
+                pid_kd: kd,
+                sharp_turn_angle: sharpTurn,
+                steer_limit: steerLimit
+            };
+            
+            settingsTopic.publish(new ROSLIB.Message({ data: JSON.stringify(configPayload) }));
+            showNotification("Parameters sent successfully to the Robot!", "success");
+        }
+        // Chuyển đổi từ mét (Odom XY) sang Lat/Lon để vẽ lên Leaflet Map
+        function convertXYToLatLon(x, y) {
+            const R = 6378137.0; 
+            let dLat = y / R;
+            let dLon = x / (R * Math.cos(ref_lat * Math.PI / 180.0));
+            let lat = ref_lat + (dLat * 180.0 / Math.PI);
+            let lon = ref_lon + (dLon * 180.0 / Math.PI);
+            return [lat, lon];
+        }
+
+        // Xóa tính năng click vẽ trên map
+        // map.on('click', function(e) { ... });
+
+        function sendManualWaypoints() {
+            // Xoá các điểm cũ trước khi tạo mới
+            clearWaypoints();
+
+            let x1 = parseFloat(document.getElementById('wp1_x').value);
+            let y1 = parseFloat(document.getElementById('wp1_y').value);
+            let x2 = parseFloat(document.getElementById('wp2_x').value);
+            let y2 = parseFloat(document.getElementById('wp2_y').value);
+            let x3 = parseFloat(document.getElementById('wp3_x').value);
+            let y3 = parseFloat(document.getElementById('wp3_y').value);
+
+            if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2) || isNaN(x3) || isNaN(y3)) {
+                showNotification("Vui lòng nhập đầy đủ tọa độ X, Y hợp lệ cho cả 3 điểm!", "warning");
+                return;
+            }
+		
+		let startIcon = L.divIcon({
+                className: 'wp-label',
+              html: `<div style="background:#ff007a; color:#ffffff; border-radius:50%; width:20px; height:20px; text-align:center; line-height:16px; font-size: 8px; border:2px solid #ffffff; box-shadow: 0 0 8px rgba(255,0,122,0.8); font-family: 'Montserrat'; font-weight: 900;">0</div>`,
+                // Chỉnh iconAnchor xuống một nửa của width/height là [10, 10] để vào đúng tâm
+                iconAnchor: [10, 10]
+            });
+            // Ghim điểm 0 ngay tại vị trí hiện tại của xe (currentRoverPos)
+            let startMarker = L.marker(currentRoverPos, {icon: startIcon, zIndexOffset: 900}).addTo(map);
+            waypointMarkers.push(startMarker);
+
+            let ptsXY = [ {x: x1, y: y1}, {x: x2, y: y2}, {x: x3, y: y3} ];
+            
+            // Đưa điểm lên bản đồ
+            ptsXY.forEach((pt, index) => {
+                let latlon = convertXYToLatLon(pt.x, pt.y);
+                selectedWaypoints.push(latlon);
+
+                let wpIcon = L.divIcon({
+                    className: 'wp-label',
+                  html: `<div style="background:#ff007a; color:#ffffff; border-radius:50%; width:20px; height:20px; text-align:center; line-height:16px; font-size: 8px; border:2px solid #ffffff; box-shadow: 0 0 8px rgba(255,0,122,0.8); font-family: 'Montserrat'; font-weight: 900;">${index + 1}</div>`,
+                    // Chỉnh iconAnchor xuống một nửa của width/height là [10, 10]
+                    iconAnchor: [10, 10]
+                });
+                let marker = L.marker(latlon, {icon: wpIcon}).addTo(map);
+                waypointMarkers.push(marker);
+            });
+
+            // Vẽ đường nối
+            plannedPathLine.setLatLngs([currentRoverPos, ...selectedWaypoints]);
+
+            // Gửi dữ liệu xuống ROS
+            if (!ros || !ros.isConnected) {
+                showNotification("Offline mode: Lộ trình đã lưu, bắt đầu mô phỏng!", "info");
+                simWaypoints = [...selectedWaypoints]; 
+                simCurrentWpIndex = 0; 
+                return;
+            }
+
+            var pathMsg = new ROSLIB.Message({
+                header: { frame_id: "odom" },
+                poses: ptsXY.map(p => ({
+                    pose: { position: { x: p.x, y: p.y, z: 0.0 }, orientation: { x:0, y:0, z:0, w:1 } }
+                }))
+            });
+
+            pathTopic.publish(pathMsg);
+            showNotification("Lập kế hoạch thành công! Đã gửi 3 điểm Waypoint xuống xe.", "success");
+		isNavigating = true;      // Bật cờ cho phép vẽ quỹ đạo
+  	  actualTrajectory = [];    // Reset lại mảng quỹ đạo cũ (nếu có)
+   	 actualPathLine.setLatLngs([]);
+        }
+
+        function clearWaypoints() {
+            selectedWaypoints = [];
+            plannedPathLine.setLatLngs([]);
+            waypointMarkers.forEach(m => map.removeLayer(m));
+            waypointMarkers = [];
+            actualTrajectory = [];
+            actualPathLine.setLatLngs([]);
+            simWaypoints = [];
+	isNavigating = false;       // Tắt cờ vẽ quỹ đạo
+    actualTrajectory = [];      // Xóa dữ liệu đường vẽ hiện tại
+    actualPathLine.setLatLngs([]);
+        }
+
+        // ==========================================
+        // BIỂU ĐỒ (CHART.JS - LIGHT THEME CONFIGURED)
+        // ==========================================
+        Chart.defaults.color = '#64748b'; // Muted text for labels
+        Chart.defaults.borderColor = 'rgba(0, 0, 0, 0.05)'; // Light grid
+        Chart.defaults.font.family = 'Montserrat';
+        Chart.defaults.font.weight = '600';
+
+        const maxDataPoints = 30;
+        const createEmptyData = () => Array(maxDataPoints).fill(0);
+        let timeLabels = Array.from({length: maxDataPoints}, (_, i) => i);
+
+        function getChartConfig(datasets, yTitle) {
+            return {
+                type: 'line',
+                data: { labels: timeLabels, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false, 
+                    plugins: { legend: { position: 'top', labels: { color: '#1e293b', boxWidth: 12, font: { weight: '800' } } } },
+                    scales: {
+                        x: { display: false },
+                        y: { title: { display: true, text: yTitle, color: '#94a3b8', font: {weight: 'bold'} } }
+                    }
+                }
+            };
+        }
+
+        let charts = {};
+
+        function initCharts() {
+            if(charts.left) return; 
+
+            charts.left = new Chart(document.getElementById('chart_left_wheel'), getChartConfig([
+                { label: 'Thực tế', data: createEmptyData(), borderColor: '#00d8ff', tension: 0.4, borderWidth: 3, pointRadius: 0 },
+                { label: 'Điều khiển', data: createEmptyData(), borderColor: '#cbd5e1', tension: 0.4, borderDash: [5, 5], borderWidth: 2, pointRadius: 0 }
+            ], 'Vận tốc (m/s)'));
+
+            charts.right = new Chart(document.getElementById('chart_right_wheel'), getChartConfig([
+                { label: 'Thực tế', data: createEmptyData(), borderColor: '#ff007a', tension: 0.4, borderWidth: 3, pointRadius: 0 },
+                { label: 'Điều khiển', data: createEmptyData(), borderColor: '#cbd5e1', tension: 0.4, borderDash: [5, 5], borderWidth: 2, pointRadius: 0 }
+            ], 'Vận tốc (m/s)'));
+
+            charts.cross = new Chart(document.getElementById('chart_cross_track'), getChartConfig([
+                { label: 'Error (m)', data: createEmptyData(), borderColor: '#b000ff', backgroundColor: 'rgba(176,0,255,0.1)', fill: true, tension: 0.4, borderWidth: 3, pointRadius: 0 }
+            ], 'Sai số (m)'));
+
+            charts.along = new Chart(document.getElementById('chart_along_track'), getChartConfig([
+                { label: 'Distance (m)', data: createEmptyData(), borderColor: '#00e676', tension: 0.4, borderWidth: 3, pointRadius: 0 }
+            ], 'Khoảng cách (m)'));
+
+            charts.yaw = new Chart(document.getElementById('chart_yaw_heading'), getChartConfig([
+                { label: 'Thực tế', data: createEmptyData(), borderColor: '#ff7300', tension: 0.4, borderWidth: 3, pointRadius: 0 },
+                { label: 'Mục tiêu', data: createEmptyData(), borderColor: '#cbd5e1', tension: 0.4, borderDash: [5, 5], borderWidth: 2, pointRadius: 0 }
+            ], 'Góc (độ)'));
+        }
+
+        function updateChartData(chart, dataIndex, newValue) {
+            let dataArr = chart.data.datasets[dataIndex].data;
+            dataArr.shift(); dataArr.push(newValue); 
+        }
+
+        // ==========================================
+        // MÔ PHỎNG SỐ LIỆU OFFLINE (SIMULATION)
+        // ==========================================
+        var simulationInterval = null;
+        var simPos = [ref_lat + 0.00005, ref_lon + 0.00005];
+        var simYaw = 0.0;
+        var simWaypoints = [];
+        var simCurrentWpIndex = 0;
+        var simSpeed = 0.000008; 
+        let msgCount = 0;
+
+        function startSimulation() {
+         
+            let s_lvel = 0.5, s_rvel = 0.5, s_cte = 0.1, s_atd = 5.0, s_des = 0.0;
+
+            simulationInterval = setInterval(() => {
+                msgCount++;
+                document.getElementById('msg-count-lbl').innerText = msgCount;
+
+                if (simWaypoints.length > 0 && simCurrentWpIndex < simWaypoints.length) {
+                    let target = simWaypoints[simCurrentWpIndex];
+                    let dy = target[0] - simPos[0];
+                    let dx = target[1] - simPos[1];
+                    let dist = Math.hypot(dx, dy);
+                    let targetYaw = Math.atan2(dy, dx);
+                    
+                    simYaw += (targetYaw - simYaw) * 0.1;
+                    s_des = targetYaw * (180 / Math.PI); 
+
+                    if (dist < 0.00003) {
+                        simCurrentWpIndex++;
+                        document.getElementById('stat_target_wp').innerText = `${Math.min(simCurrentWpIndex+1, simWaypoints.length)}/${simWaypoints.length}`;
+                        if (simCurrentWpIndex >= simWaypoints.length) {
+                            simWaypoints = []; 
+                            document.getElementById('stat_drive_state').innerText = "ĐÃ ĐẾN ĐÍCH";
+                            s_lvel = 0; s_rvel = 0;
+                        }
+                    } else {
+                        simPos[0] += Math.sin(simYaw) * simSpeed;
+                        simPos[1] += Math.cos(simYaw) * simSpeed;
+                        document.getElementById('stat_drive_state').innerText = "ĐANG DI CHUYỂN";
+                    }
+                }
+
+                let simYawDeg = simYaw * (180 / Math.PI);
+                let css_rotation = 90 - simYawDeg;
+                let iconElement = roverMarker._icon;
+                if (iconElement) iconElement.style.transform = iconElement.style.transform.replace(/rotateZ\(.*?\)/, '') + ` rotateZ(${css_rotation}deg)`;
+
+                currentRoverPos = [...simPos];
+                roverMarker.setLatLng(simPos);
+              if (isNavigating === true) {
+    actualTrajectory.push([...simPos]);
+    actualPathLine.setLatLngs(actualTrajectory);
+}
+
+            
+
+                document.getElementById('lbl_lat').innerText = simPos[0].toFixed(7);
+                document.getElementById('lbl_lon').innerText = simPos[1].toFixed(7);
+                document.getElementById('lbl_yaw').innerText = simYawDeg.toFixed(1);
+
+                document.getElementById('stat_x').innerText = ((simPos[1] - ref_lon)*111320).toFixed(2);
+                document.getElementById('stat_y').innerText = ((simPos[0] - ref_lat)*110574).toFixed(2);
+                document.getElementById('stat_yaw_rad').innerText = simYaw.toFixed(2);
+
+                if(simWaypoints.length > 0) {
+                    s_lvel += (Math.random() - 0.5) * 0.1; s_rvel += (Math.random() - 0.5) * 0.1;
+                    s_lvel = Math.max(0.2, Math.min(0.8, s_lvel)); s_rvel = Math.max(0.2, Math.min(0.8, s_rvel));
+                    s_cte += (Math.random() - 0.5) * 0.05; s_atd -= 0.05;
+                } else {
+                    s_lvel = 0; s_rvel = 0; s_cte = 0;
+                }
+
+                // CHỈ GIẢ LẬP DỮ LIỆU BÁNH XE KHI KHÔNG CÓ KẾT NỐI VỚI ROS
+                if (!ros || !ros.isConnected) {
+                    document.getElementById('stat_left_vel').innerText = s_lvel.toFixed(2);
+                    document.getElementById('stat_right_vel').innerText = s_rvel.toFixed(2);
+                    document.getElementById('stat_left_cmd').innerText = (s_lvel + 0.05).toFixed(2);
+                    document.getElementById('stat_right_cmd').innerText = (s_rvel + 0.05).toFixed(2);
+
+                    if(charts.left && document.getElementById('chart_left_wheel')) {
+                        updateChartData(charts.left, 0, s_lvel); updateChartData(charts.left, 1, s_lvel + (Math.random() * 0.1)); charts.left.update();
+                        updateChartData(charts.right, 0, s_rvel); updateChartData(charts.right, 1, s_rvel + (Math.random() * 0.1)); charts.right.update();
+                        updateChartData(charts.cross, 0, s_cte); charts.cross.update();
+                        updateChartData(charts.along, 0, s_atd > 0 ? s_atd : 0); charts.along.update();
+                        updateChartData(charts.yaw, 0, simYawDeg); updateChartData(charts.yaw, 1, s_des); charts.yaw.update();
+                    }
+                }
+            }, 200); 
+        }
+    </script>
+</body>
+</html>
