@@ -99,7 +99,7 @@ export function LoginPage() {
           className="btn-grad w-full py-4 rounded-xl font-extrabold tracking-widest text-sm uppercase text-white active:scale-95 flex items-center justify-center gap-2"
           style={{ boxShadow: '0 4px 20px rgba(99,102,241,0.3)' }}
         >
-          ĐĂNG NHẬP
+          <span>ĐĂNG NHẬP</span>
         </button>
 
         {error && (
