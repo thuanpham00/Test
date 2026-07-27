@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import * as ROSLIB from 'roslib';
+const ROSLIB = window.ROSLIB;
 import {
   REF_LAT,
   REF_LON,
@@ -75,9 +75,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isNavigating: false,
   });
 
-  const rosRef = useRef<ROSLIB.Ros | null>(null);
-  const pathTopicRef = useRef<ROSLIB.Topic | null>(null);
-  const settingsTopicRef = useRef<ROSLIB.Topic | null>(null);
+  const rosRef = useRef<ROSInstance | null>(null);
+  const pathTopicRef = useRef<ROSTopic | null>(null);
+  const settingsTopicRef = useRef<ROSTopic | null>(null);
   const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastYawDegRef = useRef<number | null>(null);
   const currentRoverPosRef = useRef<[number, number]>(initialRoverPos);
@@ -115,7 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setupSubscribers = useCallback(
-    (ros: ROSLIB.Ros) => {
+    (ros: ROSInstance) => {
       const gpsSub = new ROSLIB.Topic({ ros, name: '/gps/raw', messageType: 'std_msgs/String' });
       gpsSub.subscribe((msg: { data: string }) => {
         const parts = msg.data.split(',');

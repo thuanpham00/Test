@@ -1,21 +1,29 @@
-declare module 'roslib' {
-  export class Ros {
-    constructor(options: { url: string });
-    isConnected: boolean;
-    on(event: 'connection' | 'error' | 'close', callback: (error?: unknown) => void): void;
-    close(): void;
-  }
+/// <reference types="vite/client" />
 
-  export class Topic {
-    constructor(options: { ros: Ros; name: string; messageType: string });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subscribe(callback: (message: any) => void): void;
-    publish(message: Message): void;
-  }
+interface ROSLIBNamespace {
+  Ros: new (options: { url: string }) => ROSInstance;
+  Topic: new (options: { ros: ROSInstance; name: string; messageType: string }) => ROSTopic;
+  Message: new (values: Record<string, unknown>) => ROSMessage;
+}
 
-  export class Message {
-    constructor(values: Record<string, unknown>);
-  }
+interface ROSInstance {
+  isConnected: boolean;
+  on(event: 'connection' | 'error' | 'close', callback: (error?: unknown) => void): void;
+  close(): void;
+}
+
+interface ROSTopic {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  subscribe(callback: (message: any) => void): void;
+  publish(message: ROSMessage): void;
+}
+
+interface ROSMessage {
+  [key: string]: unknown;
+}
+
+declare interface Window {
+  ROSLIB: ROSLIBNamespace;
 }
 
 declare module '*.css';
