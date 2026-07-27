@@ -41,10 +41,12 @@ export function LiveLineChart({
   const option = useMemo(
     () => ({
       animation: false,
-      grid: { left: 48, right: 16, top: 40, bottom: 24 },
+      backgroundColor: 'transparent',
+      grid: { left: 52, right: 16, top: 44, bottom: 24 },
       legend: {
         top: 0,
-        textStyle: { color: colors.textMain, fontWeight: 800, fontFamily: 'Montserrat' },
+        textStyle: { color: colors.textMuted, fontWeight: 700, fontFamily: 'Montserrat', fontSize: 11 },
+        itemStyle: { borderWidth: 0 },
       },
       xAxis: {
         type: 'category',
@@ -54,9 +56,10 @@ export function LiveLineChart({
       yAxis: {
         type: 'value',
         name: yAxisLabel,
-        nameTextStyle: { color: '#94a3b8', fontWeight: 'bold', fontFamily: 'Montserrat' },
-        axisLabel: { color: colors.textMuted, fontFamily: 'Montserrat' },
-        splitLine: { lineStyle: { color: 'rgba(0,0,0,0.05)' } },
+        nameTextStyle: { color: '#94a3b8', fontWeight: 'bold', fontFamily: 'Montserrat', fontSize: 10 },
+        axisLabel: { color: '#94a3b8', fontFamily: 'Montserrat', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#f1f5f9' } },
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
       },
       series: series.map((s, index) => ({
         name: s.name,
@@ -65,7 +68,7 @@ export function LiveLineChart({
         showSymbol: false,
         data: s.data,
         lineStyle: {
-          width: s.dashed ? 2 : 3,
+          width: s.dashed ? 2 : 2.5,
           type: s.dashed ? 'dashed' : 'solid',
           color: s.color ?? (index === 0 ? colors.primary : colors.chartSecondary),
         },
@@ -74,7 +77,14 @@ export function LiveLineChart({
         },
         areaStyle: filled && !s.dashed
           ? {
-              color: 'rgba(37, 99, 235, 0.08)',
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(99,102,241,0.25)' },
+                  { offset: 1, color: 'rgba(99,102,241,0.01)' },
+                ],
+              },
             }
           : undefined,
       })),
@@ -83,12 +93,26 @@ export function LiveLineChart({
   );
 
   return (
-    <div className={`bg-panel rounded-2xl p-6 shadow-sm border border-border flex flex-col ${fullWidth ? 'md:col-span-2' : ''}`}>
-      <h3 className="text-xs font-black text-text-main uppercase tracking-wider mb-4 border-l-4 border-primary pl-2">
+    <div
+      className={`rounded-2xl p-5 flex flex-col relative overflow-hidden card-glow ${fullWidth ? 'md:col-span-2' : ''}`}
+      style={{ background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(99,102,241,0.06)' }}
+    >
+      {/* Top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-0.5"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.5), rgba(6,182,212,0.3), transparent)' }}
+      />
+
+      <h3 className="text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2" style={{ color: '#64748b' }}>
+        <span className="w-2 h-2 rounded-full" style={{ background: 'linear-gradient(135deg, #6366f1, #06b6d4)', display: 'inline-block' }} />
         {title}
       </h3>
-      <div className="flex-1 relative min-h-[250px] w-full">
-        <ReactECharts ref={chartRef} option={option} style={{ height: fullWidth ? 280 : 250, width: '100%' }} notMerge />
+      <div className="flex-1 relative min-h-[220px] w-full">
+        <ReactECharts
+          ref={chartRef}
+          option={option}
+          style={{ height: fullWidth ? 260 : 230, width: '100%' }}
+          notMerge
+        />
       </div>
     </div>
   );

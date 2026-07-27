@@ -2,118 +2,138 @@ import { Gauge, MapPin, Navigation2, Satellite, Settings2, Truck, Unlock } from 
 import { useApp } from '../../context/AppContext';
 import { StatCard } from './StatCard';
 
+const dataCell = "flex flex-col items-center justify-center gap-1 text-center";
+const dataLabel = "text-[9px] font-black uppercase tracking-widest";
+const dataValue = "text-xl font-black font-mono grad-text";
+
 export function SensorsTab() {
   const { telemetry } = useApp();
 
   return (
-    <div className="h-full flex-col overflow-y-auto p-8 md:p-12 bg-app-bg custom-scrollbar w-full flex">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="flex items-center justify-between mb-8 pb-4 border-b-2 border-border">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-3xl font-black text-text-main tracking-wider uppercase">Robot Status</h1>
-            <p className="text-text-muted text-sm font-semibold">Theo dõi trạng thái của các cảm biến</p>
+    <div className="h-full overflow-y-auto p-6 custom-scrollbar w-full" style={{ background: '#f1f5f9' }}>
+      <div className="max-w-7xl mx-auto w-full">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 pb-4"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}>
+          <div>
+            <h1 className="text-2xl font-black tracking-widest uppercase grad-text">Robot Status</h1>
+            <p className="text-xs font-semibold mt-1" style={{ color: '#475569' }}>
+              Theo dõi trạng thái cảm biến & hệ thống
+            </p>
           </div>
-          <span className="bg-white border border-primary/30 text-primary shadow-sm text-xs font-black px-4 py-2 rounded-full flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-primary rounded-full animate-ping" />
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black"
+            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.28)', color: '#059669' }}>
+            <span className="w-2 h-2 rounded-full pulse-dot" style={{ background: '#10b981', display: 'inline-block' }} />
             SYSTEM ACTIVE
-          </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StatCard title="Odometry (Vị trí & hướng)" icon={Navigation2}>
-            <div className="grid grid-cols-3 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Tọa độ X (m)</span>
-                <span className="text-2xl font-black text-primary font-mono">{telemetry.statX}</span>
+        {/* Grid */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+          <StatCard title="Odometry" icon={Navigation2}>
+            <div className="grid grid-cols-3 gap-2 p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>X (m)</span>
+                <span className={dataValue}>{telemetry.statX}</span>
               </div>
-              <div className="border-l border-r border-slate-200">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Tọa độ Y (m)</span>
-                <span className="text-2xl font-black text-primary font-mono">{telemetry.statY}</span>
+              <div className={dataCell} style={{ borderLeft: '1px solid rgba(99,102,241,0.15)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Y (m)</span>
+                <span className={dataValue}>{telemetry.statY}</span>
               </div>
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Góc Yaw (rad)</span>
-                <span className="text-2xl font-bold text-text-main font-mono">{telemetry.statYawRad}</span>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Yaw (rad)</span>
+                <span className="text-xl font-black font-mono" style={{ color: '#94a3b8' }}>{telemetry.statYawRad}</span>
               </div>
             </div>
           </StatCard>
 
-          <StatCard title="Tín hiệu GPS/GNSS" icon={Satellite}>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center bg-slate-50 p-3 rounded-xl border border-slate-100 items-center h-[88px]">
-              <div className="flex flex-col justify-center">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Chế độ Fix</span>
-                <span className={`text-[11px] font-black tracking-widest font-mono bg-white px-1 py-1 rounded shadow-sm border block truncate ${telemetry.gpsModeClass}`}>
+          <StatCard title="GPS / GNSS" icon={Satellite}>
+            <div className="grid grid-cols-3 gap-2 p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Fix Mode</span>
+                <span className={`text-[10px] font-black tracking-wider px-1.5 py-1 rounded-lg ${telemetry.gpsModeClass}`}
+                  style={{ border: '1px solid rgba(99,102,241,0.2)', background: 'rgba(99,102,241,0.1)', color: '#818cf8', fontSize: '9px', letterSpacing: '0.05em' }}>
                   {telemetry.gpsMode}
                 </span>
               </div>
-              <div className="border-l border-slate-200 flex flex-col justify-center">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Vệ Tinh</span>
-                <span className="text-2xl font-black text-text-main font-mono">{telemetry.gpsSat}</span>
+              <div className={dataCell} style={{ borderLeft: '1px solid rgba(99,102,241,0.15)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Satellites</span>
+                <span className={dataValue}>{telemetry.gpsSat}</span>
               </div>
-              <div className="border-l border-slate-200 flex flex-col justify-center">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">HDOP</span>
-                <span className="text-2xl font-black text-text-main font-mono">{telemetry.gpsHdop}</span>
-              </div>
-            </div>
-          </StatCard>
-
-          <StatCard title="Encoder (Vận tốc thực)" icon={Gauge}>
-            <div className="grid grid-cols-2 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <div className="border-r border-slate-200">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Bánh Trái (m/s)</span>
-                <span className="text-2xl font-black text-primary font-mono">{telemetry.leftVel}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Bánh Phải (m/s)</span>
-                <span className="text-2xl font-black text-primary font-mono">{telemetry.rightVel}</span>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>HDOP</span>
+                <span className={dataValue}>{telemetry.gpsHdop}</span>
               </div>
             </div>
           </StatCard>
 
-          <StatCard title="Cmd_vel (Lệnh điều khiển)" icon={Settings2}>
-            <div className="grid grid-cols-2 gap-4 text-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-              <div className="border-r border-slate-200">
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Lệnh Trái (m/s)</span>
-                <span className="text-2xl font-black text-text-main font-mono">{telemetry.leftCmd}</span>
+          <StatCard title="Encoder (Thực)" icon={Gauge}>
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Trái (m/s)</span>
+                <span className={dataValue}>{telemetry.leftVel}</span>
               </div>
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-1">Lệnh Phải (m/s)</span>
-                <span className="text-2xl font-black text-text-main font-mono">{telemetry.rightCmd}</span>
+              <div className={dataCell} style={{ borderLeft: '1px solid rgba(99,102,241,0.15)' }}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Phải (m/s)</span>
+                <span className={dataValue}>{telemetry.rightVel}</span>
               </div>
             </div>
           </StatCard>
 
-          <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
-            <div className="bg-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Bảo mật hệ thống</span>
-              <div className="flex items-center gap-3 text-white font-bold text-lg">
-                <div className="p-2 bg-primary/20 rounded-full">
-                  <Unlock className="w-5 h-5 text-primary-light" />
-                </div>
-                <span className="tracking-wide">Đã mở khóa</span>
+          <StatCard title="Cmd_vel (Lệnh)" icon={Settings2}>
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-xl" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <div className={dataCell}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Trái (m/s)</span>
+                <span className="text-xl font-black font-mono" style={{ color: '#94a3b8' }}>{telemetry.leftCmd}</span>
+              </div>
+              <div className={dataCell} style={{ borderLeft: '1px solid rgba(99,102,241,0.15)' }}>
+                <span className={dataLabel} style={{ color: '#475569' }}>Phải (m/s)</span>
+                <span className="text-xl font-black font-mono" style={{ color: '#94a3b8' }}>{telemetry.rightCmd}</span>
               </div>
             </div>
-
-            <div className="bg-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Trạng thái xe</span>
-              <div className="flex items-center gap-3 text-white font-bold text-lg">
-                <div className="p-2 bg-primary/20 rounded-full">
-                  <Truck className="w-5 h-5 text-primary-light" />
-                </div>
-                <span className="uppercase tracking-widest text-sm text-primary-light">{telemetry.driveState}</span>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 rounded-2xl p-5 shadow-lg flex flex-col justify-between border border-slate-700">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tiến độ dẫn đường</span>
-              <div className="flex items-center gap-3 text-white font-bold text-lg">
-                <div className="p-2 bg-primary/20 rounded-full">
-                  <MapPin className="w-5 h-5 text-primary-light" />
-                </div>
-                <span className="font-mono text-primary-light tracking-wider text-xl">{telemetry.targetWp}</span>
-              </div>
-            </div>
-          </div>
+          </StatCard>
         </div>
+
+        {/* Bottom status cards */}
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            {
+              icon: Unlock,
+              label: 'Bảo Mật Hệ Thống',
+              value: 'Đã mở khóa',
+              valueColor: '#34d399',
+              accent: '#10b981',
+            },
+            {
+              icon: Truck,
+              label: 'Trạng Thái Xe',
+              value: telemetry.driveState,
+              valueColor: '#818cf8',
+              accent: '#6366f1',
+            },
+            {
+              icon: MapPin,
+              label: 'Tiến Độ Dẫn Đường',
+              value: telemetry.targetWp,
+              valueColor: '#22d3ee',
+              accent: '#06b6d4',
+            },
+          ].map(({ icon: Icon, label, value, valueColor, accent }) => (
+            <div key={label} className="rounded-2xl p-5 flex items-center gap-4 card-glow"
+              style={{ background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(99,102,241,0.06)' }}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: `rgba(${accent === '#10b981' ? '16,185,129' : accent === '#6366f1' ? '99,102,241' : '6,182,212'},0.1)`, border: `1px solid rgba(${accent === '#10b981' ? '16,185,129' : accent === '#6366f1' ? '99,102,241' : '6,182,212'},0.22)` }}>
+                <Icon className="w-5 h-5" style={{ color: accent }} />
+              </div>
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>{label}</div>
+                <div className="text-base font-black font-mono tracking-wide" style={{ color: valueColor === '#818cf8' ? '#6366f1' : valueColor === '#22d3ee' ? '#0891b2' : valueColor }}>{value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
     </div>
   );

@@ -6,19 +6,32 @@ export function PlottingTab({ active }: { active: boolean }) {
   const { chartData, msgCount } = useApp();
 
   return (
-    <div className="h-full flex-col overflow-y-auto p-8 md:p-12 bg-app-bg custom-scrollbar w-full flex">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-4 mb-8 border-b-2 border-border pb-4 flex-wrap">
-          <h1 className="text-3xl font-black text-text-main tracking-wider uppercase">Data Plotting</h1>
-          <span className="bg-white border border-border text-text-muted shadow-sm text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-            <BarChart2 className="w-3.5 h-3.5" /> Live Stream
-          </span>
-          <span className="text-xs text-text-muted font-semibold ml-auto bg-slate-100 px-4 py-2 rounded-lg border border-slate-200">
-            Đã nhận: <span className="text-primary font-black font-mono text-sm ml-1">{msgCount}</span> messages
-          </span>
+    <div className="h-full overflow-y-auto p-6 custom-scrollbar w-full" style={{ background: '#f1f5f9' }}>
+      <div className="max-w-7xl mx-auto w-full">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 pb-4 flex-wrap gap-3"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.12)' }}>
+          <div>
+            <h1 className="text-2xl font-black tracking-widest uppercase grad-text">Data Plotting</h1>
+            <p className="text-xs font-semibold mt-1" style={{ color: '#475569' }}>Live sensor data stream visualization</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black"
+              style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: '#818cf8' }}>
+              <BarChart2 className="w-3.5 h-3.5" /> Live Stream
+            </span>
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-full"
+              style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(99,102,241,0.15)', color: '#64748b' }}>
+              Nhận:{' '}
+              <span className="font-black font-mono" style={{ color: '#818cf8' }}>{msgCount}</span>{' '}
+              messages
+            </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Charts grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <LiveLineChart
             active={active}
             title="Vận tốc Bánh Trái (Điều khiển & Thực tế)"
